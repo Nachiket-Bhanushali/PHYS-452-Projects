@@ -54,7 +54,7 @@ def generate_circuit(mode, val):
 # --- Execution ---
 circuit = generate_circuit(preset, param)
 
-col1, col2 = st.columns()
+col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("Circuit Diagram")
