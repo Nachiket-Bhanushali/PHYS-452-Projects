@@ -29,7 +29,7 @@ def generate_circuit(mode, val):
 
     if mode == "Teleportation":
         # Prepare an initial state on q0 --> arbitrary superposition of |0> and |1>
-        qc.rx(val[0], 0)
+        qc.ry(val[0], 0)
         qc.rz(val[1], 0)
 
         #Prepare Bell pair on q1 and q2
