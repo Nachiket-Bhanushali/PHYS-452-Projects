@@ -29,8 +29,9 @@ def generate_circuit(mode, val):
         qc.rx(val, 0)
         # Create entanglement chain
         for i in range(1, 10, 2):
-            qc.h(i)
-            qc.cx(i, i + 1)
+            if i < 9:
+                qc.h(i)
+                qc.cx(i, i + 1)
         qc.barrier()
         # Representative CNOTs for multi-qubit interaction
         qc.cx(0, 1)
