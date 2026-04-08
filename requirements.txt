@@ -2,3 +2,4 @@ streamlit
 qiskit
 qiskit_aer
 matplotlib
+pylatexenc
