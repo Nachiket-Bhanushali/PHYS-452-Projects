@@ -1,4 +1,5 @@
 import streamlit as st
+import math
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit.visualization import circuit_drawer
@@ -10,11 +11,13 @@ st.title("⚛ 10-Qubit Quantum Simulator")
 
 # --- Sidebar Controls ---
 st.sidebar.header("Circuit Configuration")
-preset = st.sidebar.selectbox("Select Preset", ["Teleportation (Extended)", "Hubbard-inspired Ring"])
+preset = st.sidebar.selectbox("Select Preset", ["Teleportation", "Hubbard-inspired Ring"])
 
-if preset == "Teleportation (Extended)":
-    st.sidebar.info("Simulating a chain of Bell pairs and teleportation logic across 10 qubits.")
-    param = st.sidebar.slider("Initial State Rotation (θ)", 0.0, 6.28, 1.57)
+if preset == "Teleportation":
+    st.sidebar.info("Simulating a circuit to teleport quantum information from Alice to Bob.")
+    theta_x = st.sidebar.slider("Initial Rotation About X Axis (θ_x)", 0.0, 6.28, math.pi/2)
+    theta_z = st.sidebar.slider("Initial Rotation About Z Axis (θ_z)", 0.0, 6.28, math.pi)
+    param = [theta_x, theta_z]
 else:
     st.sidebar.info("Simulating a 1D Hubbard-like interaction chain (XY-model logic).")
     param = st.sidebar.slider("Interaction Strength (J/U)", 0.0, 10.0, 1.0)
@@ -22,20 +25,24 @@ else:
 
 # --- Circuit Generation Logic ---
 def generate_circuit(mode, val):
-    qc = QuantumCircuit(10)
+    qc = QuantumCircuit(3)
 
-    if mode == "Teleportation (Extended)":
-        # Prepare an initial state on q0
-        qc.rx(val, 0)
-        # Create entanglement chain
-        for i in range(1, 10, 2):
-            if i < 9:
-                qc.h(i)
-                qc.cx(i, i + 1)
-        qc.barrier()
-        # Representative CNOTs for multi-qubit interaction
+    if mode == "Teleportation":
+        # Prepare an initial state on q0 --> arbitrary superposition of |0> and |1>
+        qc.rx(val[0], 0)
+        qc.rz(val[1], 0)
+
+        #Prepare Bell pair on q1 and q2
+        qc.h(1)
+        qc.cx(1,2)
+
+        # Teleportation protocol
         qc.cx(0, 1)
         qc.h(0)
+        qc.cx(1,2)
+        qc.cz(0,2)
+
+        qc.measure_all()
 
     else:  # Hubbard-inspired
         # Initialize with alternating states
@@ -47,7 +54,8 @@ def generate_circuit(mode, val):
             qc.rxx(val, i, i + 1)
             qc.ryy(val, i, i + 1)
 
-    qc.measure_all()
+        qc.measure_all()
+
     return qc
 
 

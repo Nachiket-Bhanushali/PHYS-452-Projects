@@ -1,4 +1,5 @@
 streamlit
+math
 qiskit
 qiskit_aer
 matplotlib
