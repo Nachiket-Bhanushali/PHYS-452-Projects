@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # --- Page Config ---
 st.set_page_config(page_title="10-Qubit Quantum Explorer", layout="wide")
-st.title("⚛️ 10-Qubit Quantum Simulator")
+st.title("⚛ 10-Qubit Quantum Simulator")
 
 # --- Sidebar Controls ---
 st.sidebar.header("Circuit Configuration")
