@@ -76,21 +76,18 @@ section[data-testid="stSidebar"] {
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚛️ P452 Quantum Simulator")
+    st.markdown("## ⚛ P452 Project 1 - 10 Qubit Simulator")
     st.markdown("---")
     page = st.radio(
         "Select Module",
         [
             "🏠 Home",
-            "Q1.2 — Parameter Control",
+            "Q1.2 — Parameter Control Loop",
             "Q1.3 — GHZ State (10-qubit)",
             "Q1.4 — Unitarity & State Recovery",
-            "Q2.1 — Teleportation",
+            "Q2.1/2.3 — Teleportation",
             "Q2.2 — Long-Distance CNOT",
-            "Q2.3 — Teleport Statistics",
-            "Q3.1 — Hubbard: Circuit",
-            "Q3.2 — Hubbard: Non-Interacting",
-            "Q3.3 — Hubbard: Mott Physics",
+            "Q3 — Hubbard Model",
         ],
     )
     st.markdown("---")
@@ -98,10 +95,10 @@ with st.sidebar:
 
 # ─── Home ────────────────────────────────────────────────────────────────────────
 if page == "🏠 Home":
-    st.title("Universal Quantum Computer Simulator")
+    st.title("⚛ 10 Qubit Quantum Simulator")
     st.markdown(
         """
-        **P452 Project 1 · Cheng Chin · University of Chicago**
+        **P452 Project 1 · Nachiket Bhanushali**
 
         This app provides a complete 10-qubit Qiskit-Aer simulation environment covering:
         - Quantum circuit construction & visualization
@@ -115,8 +112,8 @@ if page == "🏠 Home":
     )
     st.info("🔧 Backend: Qiskit-Aer `AerSimulator`  |  📦 Frontend: Streamlit")
 
-# ─── Q1.2 Parameter Control ──────────────────────────────────────────────────────
-elif page == "Q1.2 — Parameter Control":
+# ─── Q1.2 Parameter Control Loop ──────────────────────────────────────────────────────
+elif page == "Q1.2 — Parameter Control Loop":
     st.header("Q1.2 — Parameter Control Loop")
     st.markdown(
         """
@@ -164,11 +161,16 @@ elif page == "Q1.2 — Parameter Control":
 elif page == "Q1.3 — GHZ State (10-qubit)":
     st.header("Q1.3 — 10-Qubit GHZ State")
     st.latex(r"|GHZ\rangle = \frac{|0\rangle + |1023\rangle}{\sqrt{2}}")
-    st.markdown("Prepared via one Hadamard on q0 followed by nine cascaded CNOT gates.")
+    st.markdown("Prepared via one Hadamard on q0 followed by nine cascaded CNOT gates. Hadamard on q0 prepares")
+    st.latex(r"\frac{|0\rangle + |1\rangle}{\sqrt{2}}")
+    st.markdown("The first CNOT prepares a Bell pair with q0 and q1:")
+    st.latex(r"\frac{|00\rangle + |11\rangle}{\sqrt{2}}")
+    st.markdown(" and each subsequent CNOT entangles the next qubit with the previous ones. Circuit has 10 qubits and "
+                "10 classical bits to store measurement results.")
 
     qc = make_ghz_circuit(10)
 
-    st.subheader("Circuit Diagram (10 wires)")
+    st.subheader("Circuit Diagram")
     fig_circ = qc.draw("mpl", style="iqp", fold=-1)
     fig_circ.set_size_inches(16, 5)
     st.pyplot(fig_circ)
@@ -181,7 +183,7 @@ elif page == "Q1.3 — GHZ State (10-qubit)":
     plt.close()
 
     st.markdown(
-        "As expected, only `|0000000000⟩` (= |0⟩) and `|1111111111⟩` (= |1023⟩) appear."
+        "As expected, only `|0000000000⟩` (= |0⟩) and `|1111111111⟩` (= |1023⟩) appear, with ~50% probability each."
     )
 
 # ─── Q1.4 Unitarity ──────────────────────────────────────────────────────────────
@@ -200,30 +202,30 @@ elif page == "Q1.4 — Unitarity & State Recovery":
         """
     )
 
-    qc_init, qc_forward, qc_reverse, sv_init, sv_after, sv_recovered = make_unitarity_circuit()
+    qc_full, sv_init, sv_after, sv_recovered = make_unitarity_circuit()
 
+    st.subheader("Circuit Diagram")
+    fig_circ = qc_full.draw("mpl", style="iqp", fold=-1)
+    fig_circ.set_size_inches(22, 6)
+    st.pyplot(fig_circ)
+    plt.close()
+
+    st.subheader("State Vectors")
     col1, col2, col3 = st.columns(3)
     stages = [
-        ("Step 1: Initial State", qc_init, sv_init),
-        ("Step 2: After CNOT Chain", qc_forward, sv_after),
-        ("Step 3: Recovered State", qc_reverse, sv_recovered),
+        ("State Preparation", sv_init),
+        ("After Gate Operations", sv_after),
+        ("After Reverse Operations", sv_recovered),
     ]
-    for col, (title, qc_s, sv) in zip([col1, col2, col3], stages):
+    for col, (title, sv) in zip([col1, col2, col3], stages):
         with col:
-            st.subheader(title)
-            # show non-zero amplitudes
+            st.markdown(f"**{title}**")
             amps = {
                 format(i, "010b"): round(float(np.abs(amp) ** 2), 6)
                 for i, amp in enumerate(sv.data)
                 if abs(amp) > 1e-6
             }
             st.json(amps)
-
-    st.subheader("Full Circuit")
-    fig_circ = qc_reverse.draw("mpl", style="iqp", fold=40)
-    fig_circ.set_size_inches(18, 6)
-    st.pyplot(fig_circ)
-    plt.close()
 
     with st.expander("Analysis: Unitarity Confirmed"):
         st.markdown(
@@ -235,26 +237,60 @@ elif page == "Q1.4 — Unitarity & State Recovery":
             """
         )
 
-# ─── Q2.1 Teleportation ─────────────────────────────────────────────────────────
-elif page == "Q2.1 — Teleportation":
-    st.header("Q2.1 — Quantum Teleportation")
+# ─── Q2.1 / Q2.3 Combined — Teleportation ────────────────────────
+elif page == "Q2.1/2.3 — Teleportation":
+    st.header("Q2.1 & Q2.3 — Teleportation")
+
+    # ── Alice's state controls ───────────────────────────────────────────────────
+    st.subheader("Alice's Initial State")
     st.markdown(
         r"""
-        **Alice's state:** $|q_0\rangle = \frac{1}{\sqrt{5}}(2|0\rangle + |1\rangle)$
-
-        **Protocol (3 qubits):**
-        - q0: Alice's message qubit
-        - q1: Alice's half of the Bell pair
-        - q2: Bob's qubit (receives teleported state)
+        Alice's qubit is prepared as $R_z(\phi)\,R_y(\theta)|0\rangle$.
+        Adjust the sliders to choose any single-qubit state.
+        The default produces $\frac{1}{\sqrt{5}}(2|0\rangle + |1\rangle)$.
         """
     )
 
-    qc = make_teleportation_circuit()
+    DEFAULT_THETA_Y = float(2 * np.arccos(2 / np.sqrt(5)))  # ≈ 0.9273 rad
+    DEFAULT_THETA_Z = 0.0
 
-    st.subheader("Teleportation Circuit")
-    fig_circ = qc.draw("mpl", style="iqp")
-    fig_circ.set_size_inches(14, 4)
-    st.pyplot(fig_circ)
+    col_sl1, col_sl2 = st.columns(2)
+    with col_sl1:
+        theta_y = st.slider(
+            "Ry angle θ (radians)",
+            min_value=0.0, max_value=float(2 * np.pi),
+            value=DEFAULT_THETA_Y, step=0.01, format="%.4f",
+        )
+    with col_sl2:
+        theta_z = st.slider(
+            "Rz angle φ (radians)",
+            min_value=float(-np.pi), max_value=float(np.pi),
+            value=DEFAULT_THETA_Z, step=0.01, format="%.4f",
+        )
+
+    alpha = np.cos(theta_y / 2)
+    beta = np.exp(1j * theta_z) * np.sin(theta_y / 2)
+    col_a, col_b, col_state = st.columns([1, 1, 2])
+    col_a.metric("α = ⟨0|ψ⟩", f"{alpha:.4f}")
+    col_b.metric("|β| = |⟨1|ψ⟩|", f"{abs(beta):.4f}")
+    col_state.latex(
+        rf"|\psi\rangle = {alpha:.3f}|0\rangle"
+        rf"+ {abs(beta):.3f}\,e^{{i({theta_z:.3f})}}\,|1\rangle"
+    )
+
+    st.divider()
+
+    # ── Q2.1: Teleportation circuit ──────────────────────────────────────────────
+    st.subheader("Q2.1 — Teleportation Circuit")
+    st.markdown(
+        "**Protocol (3 qubits):** "
+        "q0 = Alice's message qubit · q1 = Alice's Bell-pair qubit · q2 = Bob's qubit"
+    )
+
+    qc_tel = make_teleportation_circuit(theta_y=theta_y, theta_z=theta_z)
+    fig_tel = qc_tel.draw("mpl", style="iqp")
+    fig_tel.set_size_inches(14, 4)
+    st.pyplot(fig_tel)
     plt.close()
 
     with st.expander("Protocol Details"):
@@ -263,37 +299,102 @@ elif page == "Q2.1 — Teleportation":
             **Bell State Preparation (q1, q2):** H on q1, then CNOT q1→q2 creates $|\Phi^+\rangle$.
 
             **Bell Measurement (q0, q1):**
-            1. CNOT q0→q1
-            2. H on q0
-            3. Measure q0, q1
+            1. CNOT q0→q1  2. H on q0  3. Measure q0, q1
 
             **Bob's Correction (q2):**
-            - If q1 = 1: apply X to q2
-            - If q0 = 1: apply Z to q2
+            - If c1 = 1: apply X · If c0 = 1: apply Z
 
-            After corrections, q2 holds exactly Alice's original state.
+            After corrections, q2 holds exactly Alice's original state $R_z(\phi)R_y(\theta)|0\rangle$.
             """
         )
+
+    st.divider()
+
+    # ── Q2.3: Teleportation statistics ───────────────────────────────────────────
+    st.subheader("Q2.3 — Teleportation Statistics")
+    st.markdown(
+        f"Run the teleportation **{shots} times** with the state set above and measure Bob's qubit."
+    )
+
+    if st.button("▶ Run Simulation"):
+        qc_run = make_teleportation_circuit(theta_y=theta_y, theta_z=theta_z)
+        counts = run_circuit(qc_run, shots=shots)
+
+        # Bob is q2; in the 2-bit classical register, c[0]=q0 measurement, c[1]=q1 measurement.
+        # Bob's qubit is NOT in the classical register — we need a 3rd bit.
+        # Re-run with an extra classical bit for Bob.
+        from qiskit import QuantumRegister, ClassicalRegister
+
+        qr_s = QuantumRegister(3, "q")
+        cr_s = ClassicalRegister(3, "c")
+        qc_stat = QuantumCircuit(qr_s, cr_s)
+        qc_stat.ry(theta_y, 0)
+        if theta_z != 0.0:
+            qc_stat.rz(theta_z, 0)
+        qc_stat.barrier()
+        qc_stat.h(1);
+        qc_stat.cx(1, 2)
+        qc_stat.barrier()
+        qc_stat.cx(0, 1);
+        qc_stat.h(0)
+        qc_stat.measure(qr_s[0], cr_s[0])
+        qc_stat.measure(qr_s[1], cr_s[1])
+        with qc_stat.if_test((cr_s[1], 1)):
+            qc_stat.x(2)
+        with qc_stat.if_test((cr_s[0], 1)):
+            qc_stat.z(2)
+        qc_stat.measure(qr_s[2], cr_s[2])
+
+        counts_stat = run_circuit(qc_stat, shots=shots)
+        # MSB of 3-bit string is q2 (Bob)
+        bob_0 = sum(v for k, v in counts_stat.items() if k[0] == "0")
+        bob_1 = sum(v for k, v in counts_stat.items() if k[0] == "1")
+        total = bob_0 + bob_1
+
+        # Expected probabilities from the input state
+        p_expect_0 = float(np.abs(alpha) ** 2)
+        p_expect_1 = float(np.abs(beta) ** 2)
+
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("Bob |0⟩ (measured)", f"{bob_0 / total * 100:.1f}%")
+        mc2.metric("Bob |1⟩ (measured)", f"{bob_1 / total * 100:.1f}%")
+        mc3.metric("Bob |0⟩ (expected)", f"{p_expect_0 * 100:.1f}%")
+        mc4.metric("Bob |1⟩ (expected)", f"{p_expect_1 * 100:.1f}%")
+
+        fig_hist = plot_histogram(counts_stat, title=f"Teleportation ({shots} shots)")
+        st.pyplot(fig_hist)
+        plt.close()
+
+        with st.expander("Analysis"):
+            st.markdown(
+                rf"""
+                **Expected from input state:**
+                $P(|0\rangle) = |\alpha|^2 = {p_expect_0:.4f}$,
+                $P(|1\rangle) = |\beta|^2 = {p_expect_1:.4f}$
+
+                Any deviation from these values is due to **shot noise** (~$1/\sqrt{{N}}$ ≈ {1 / np.sqrt(shots):.3f}).
+                Ideal statevector simulation gives exact agreement; finite sampling introduces fluctuations.
+                """
+            )
+    else:
+        st.info("Press **▶ Run Simulation** to execute the teleportation and measure Bob's qubit.")
 
 # ─── Q2.2 Long-Distance CNOT ────────────────────────────────────────────────────
 elif page == "Q2.2 — Long-Distance CNOT":
     st.header("Q2.2 — Long-Distance CNOT (q0 → q4)")
     st.markdown(
         """
-        Hardware constraint: only adjacent CNOTs allowed (q_i ↔ q_{i+1}).
-        To perform CNOT q0→q4, we SWAP q4 towards q1 step by step,
-        execute the CNOT, then SWAP back.
-
-        Each SWAP = 3 CNOT gates.
+        Hardware constraint: only adjacent CNOTs and SWAPS allowed (q_i ↔ q_{i+1}).
+        To perform CNOT q0→q4, we SWAP q4 step-by-step toward q0,
+        execute the CNOT, then SWAP back. Each SWAP decomposes into 3 CNOTs.
         """
     )
 
-    qc, n_cnots = make_long_distance_cnot_circuit()
+    qc_ld, n_cnots = make_long_distance_cnot_circuit()
 
-    st.subheader("Circuit Diagram")
-    fig_circ = qc.draw("mpl", style="iqp")
-    fig_circ.set_size_inches(16, 4)
-    st.pyplot(fig_circ)
+    fig_ld = qc_ld.draw("mpl", style="iqp")
+    fig_ld.set_size_inches(12, 3)
+    st.pyplot(fig_ld)
     plt.close()
 
     st.metric("Total CNOT gates used", n_cnots)
@@ -301,13 +402,13 @@ elif page == "Q2.2 — Long-Distance CNOT":
     with st.expander("Gate Count Breakdown"):
         st.markdown(
             r"""
-            To CNOT q0→q4 in a linear chain (0-1-2-3-4):
+            To CNOT q0→q4 in a linear chain (0–1–2–3–4):
 
-            - SWAP(3,4): 3 CNOTs  → brings q4 to position 3
-            - SWAP(2,3): 3 CNOTs  → brings it to position 2
-            - SWAP(1,2): 3 CNOTs  → brings it to position 1
-            - CNOT(0,1): 1 CNOT   → the actual gate
-            - SWAP(1,2): 3 CNOTs  → restore
+            - SWAP(3,4): 3 CNOTs — brings q4 to position 3
+            - SWAP(2,3): 3 CNOTs — brings it to position 2
+            - SWAP(1,2): 3 CNOTs — brings it to position 1
+            - CNOT(0,1): 1 CNOT  — the actual gate
+            - SWAP(1,2): 3 CNOTs — final 3 SWAP gates to restore q1 back to position 4
             - SWAP(2,3): 3 CNOTs
             - SWAP(3,4): 3 CNOTs
 
@@ -315,46 +416,9 @@ elif page == "Q2.2 — Long-Distance CNOT":
             """
         )
 
-# ─── Q2.3 Teleport Statistics ───────────────────────────────────────────────────
-elif page == "Q2.3 — Teleport Statistics":
-    st.header("Q2.3 — Teleportation Statistics (|0⟩ input, 1024 shots)")
-    st.markdown(
-        "Alice starts with `|0⟩`. After full teleportation, Bob's qubit should also be `|0⟩`."
-    )
-
-    qc = make_teleportation_circuit(alice_state="zero")
-    counts = run_circuit(qc, shots=1024)
-
-    # Bob's qubit is q2 (rightmost in little-endian)
-    bob_zero = sum(v for k, v in counts.items() if k[-1] == "0")
-    bob_one  = sum(v for k, v in counts.items() if k[-1] == "1")
-    total    = bob_zero + bob_one
-    prob_zero = bob_zero / total
-
-    col1, col2 = st.columns(2)
-    col1.metric("Bob finds |0⟩", f"{prob_zero*100:.1f}%")
-    col2.metric("Bob finds |1⟩", f"{(1-prob_zero)*100:.1f}%")
-
-    fig_hist = plot_histogram(counts, title="Teleportation (|0⟩ input, 1024 shots)")
-    st.pyplot(fig_hist)
-    plt.close()
-
-    with st.expander("Analysis"):
-        st.markdown(
-            r"""
-            **Expected:** Bob measures |0⟩ with 100% probability.
-
-            **Deviations** can arise from:
-            - **Shot noise**: finite sampling (N=1024) introduces statistical fluctuations ~1/√N ≈ 3%
-            - **Classical feed-forward** in simulation: Qiskit's `c_if` gates are ideal; no hardware noise here.
-
-            Ideal statevector simulation gives exactly 100%; shot-based simulation will hover near 100%.
-            """
-        )
-
-# ─── Q3.1 Hubbard Circuit ───────────────────────────────────────────────────────
-elif page == "Q3.1 — Hubbard: Circuit":
-    st.header("Q3.1 — Fermi-Hubbard Circuit (1 Trotter Step)")
+# ─── Q3 — Hubbard Model (combined) ─────────────────────────────────────────────
+elif page == "Q3 — Hubbard Model":
+    st.header("Q3 — Fermi-Hubbard Model")
     st.markdown(
         r"""
         **Qubit mapping (Jordan-Wigner):**
@@ -367,21 +431,42 @@ elif page == "Q3.1 — Hubbard: Circuit":
         | q3 | 2 | ↓ |
 
         **Hamiltonian:**
-        $$H = -J\sum_\sigma(c^\dagger_{1\sigma}c_{2\sigma} + h.c.) + U\sum_i n_{i\uparrow}n_{i\downarrow}$$
+        $$H = -J\sum_\sigma(c^\dagger_{1\sigma}c_{2\sigma} + \text{h.c.}) + U\sum_i n_{i\uparrow}n_{i\downarrow}$$
 
-        After JW mapping:
-        $$H_J = \frac{J}{2}(X_j X_{j+1} + Y_j Y_{j+1}), \quad H_U = \frac{U}{4}(I - Z_{j\uparrow} - Z_{j\downarrow} + Z_{j\uparrow}Z_{j\downarrow})$$
+        After Jordan-Wigner mapping:
+        
+        Tunneling term: $$ H_J = - \tfrac{J}{2}(X_j X_{j+1} + Y_j Y_{j+1}) $$
+        
+        On-site Interaction term: $$ H_U = \tfrac{U}{4}(I - Z_{j\uparrow} - Z_{j\downarrow} + Z_{j\uparrow}Z_{j\downarrow})$$
         """
     )
 
-    J = st.slider("Hopping amplitude J", 0.1, 2.0, 1.0, 0.1)
-    U = st.slider("Interaction U", 0.0, 20.0, 5.0, 0.5)
-    tau = st.slider("Trotter step τ", 0.01, 1.0, 0.1, 0.01)
+    st.divider()
 
-    qc = make_hubbard_circuit(J=J, U=U, tau=tau, n_trotter=1)
+    # ── Shared parameter controls ─────────────────────────────────────────────────
+    st.subheader("Parameters")
 
-    st.subheader("One Trotter Step Circuit")
-    fig_circ = qc.draw("mpl", style="iqp")
+    pcol1, pcol2 = st.columns(2)
+    with pcol1:
+        J = st.slider("Hopping amplitude J", 0.1, 10.0, 1.0, 0.1)
+    with pcol2:
+        U = st.slider("Interaction U", 0.0, 100.0, 0.0, 0.5)
+
+    init_state = st.radio(
+        "Initial state",
+        ["1000 — one ↑ electron at Site 1", "1100 — both spins at Site 1"],
+        horizontal=True,
+    )
+    init_str = "1000" if init_state.startswith("1000") else "1100"
+
+    st.divider()
+
+    # ── Q3.1: Circuit diagram (1 Trotter step) ────────────────────────────────────
+    st.subheader("Q3.1 — Circuit Diagram (1 Trotter Step)")
+
+    tau_circ = st.slider("Trotter step size dt (for circuit display only)", 0.01, 1.0, 0.1, 0.01)
+    qc_circ = make_hubbard_circuit(J=J, U=U, tau=tau_circ, n_trotter=1, init_state=init_str)
+    fig_circ = qc_circ.draw("mpl", style="iqp")
     fig_circ.set_size_inches(14, 4)
     st.pyplot(fig_circ)
     plt.close()
@@ -389,123 +474,119 @@ elif page == "Q3.1 — Hubbard: Circuit":
     with st.expander("Gate Labels"):
         st.markdown(
             r"""
-            - **RXX / RYY gates** (blue/teal): Hopping term $e^{-i\frac{J\tau}{2}(XX+YY)}$
-            - **RZZ gate** (orange): ZZ interaction part of $H_U$
-            - **Rz gates** (green): Local Z rotations from $-Z_{j\uparrow}$ and $-Z_{j\downarrow}$ terms
-            - **Z-string**: The Zj factor from the JW string appears as a single-qubit Z sandwiched
-              between the XX+YY rotations for the non-nearest-neighbor spin-up hop (q0→q2).
+            - **XZX / YZY blocks**: Hopping term $e^{-i\frac{J\tau}{2}(XZX + YZY)}$ — spin-up hop q0↔q2 with JW Z-string on q1; same structure for spin-down q1↔q3
+            - **Rz gates**: Local Z rotations from the $-Z_{j\uparrow}$ and $-Z_{j\downarrow}$ chemical-potential terms in $H_U$
+            - **RZZ gate**: Entangling ZZ term $e^{-i\frac{U\tau}{8}Z_{j\uparrow}Z_{j\downarrow}}$ — on-site interaction
+            - **Z-string**: Single-qubit Z between the two CNOT pairs enforces fermionic anti-commutation for non-adjacent hops
             """
         )
 
-# ─── Q3.2 Non-Interacting ───────────────────────────────────────────────────────
-elif page == "Q3.2 — Hubbard: Non-Interacting":
-    st.header("Q3.2 — Non-Interacting Dynamics (U = 0, J = 1)")
-    st.markdown(
-        r"""
-        **Initial state:** $|1000\rangle$ (one ↑ electron at Site 1).
+    st.divider()
 
-        **Expected:** Rabi oscillation — electron tunnels to Site 2 and back.
-        Transfer complete at $\tau = \pi/2$ (half the Rabi period),
-        matching a two-level system with coupling J: $\Omega_R = 2J$.
-        """
-    )
+    # ── Q3.2 / Q3.3: Time-evolution plots ────────────────────────────────────────
+    st.subheader("Q3.2 / Q3.3 — Time Evolution")
 
-    n_points = 60
+    pcol3, pcol4 = st.columns(2)
+    with pcol3:
+        n_points = st.slider("Time points", 20, 100, 40, 10)
+    with pcol4:
+        n_trotter = st.slider("Trotter steps per time point", 1, 40, 20, 1)
+
     taus = np.linspace(0, np.pi, n_points)
-    n_trotter = st.slider("Trotter steps per τ", 1, 20, 10)
 
-    probs_site2 = []
-    for tau in taus:
-        qc = make_hubbard_circuit(J=1.0, U=0.0, tau=tau, n_trotter=n_trotter,
-                                  init_state="1000")
-        sv = get_statevector(qc)
-        # |0010⟩ in Qiskit little-endian = index where q2=1, others 0
-        # binary: q3q2q1q0 = 0100 = 4
-        idx = int("0100", 2)
-        probs_site2.append(float(np.abs(sv.data[idx]) ** 2))
+    # State indices (Qiskit little-endian: q0 = LSB)
+    # |1000⟩ → q0=0,q1=0,q2=0,q3=1 → index 0b1000 = 8
+    # |0010⟩ → q0=0,q1=1,q2=0,q3=0 → index 0b0010 = 2
+    # |1100⟩ → q0=0,q1=0,q2=1,q3=1 → index 0b1100 = 12
+    # |0011⟩ → q0=1,q1=1,q2=0,q3=0 → index 0b0011 = 3
+    # |0110⟩: q0=0,q1=1,q2=1,q3=0 → index = 0b0110 = 6
+    # |1001⟩: q0=1,q1=0,q2=0,q3=1 → index = 0b0110 = 13
+    idx_map = {
+        "1000": 0b1000,
+        "0010": 0b0010,
+        "1100": 0b1100,
+        "0011": 0b0011,
+        "0110": 0b0110,
+        "1001": 0b1001,
+    }
 
-    fig, ax = plt.subplots(figsize=(8, 4), facecolor="#07090f")
-    ax.set_facecolor("#07090f")
-    ax.plot(taus / np.pi, probs_site2, color="#3b6ef8", lw=2.5, label="P(Site 2 ↑)")
-    ax.axvline(0.5, color="#f8a83b", ls="--", lw=1.5, label=r"τ = π/2 (expected transfer)")
-    ax.set_xlabel(r"τ / π", color="#e2e8f7")
+    with st.spinner("Running Trotterized time evolution…"):
+        if init_str == "1000":
+            p_init, p_transfer = [], []
+            for tau in taus:
+                qc_t = make_hubbard_circuit(J=J, U=U, tau=tau,
+                                            n_trotter=n_trotter, init_state="1000")
+                sv = Statevector(qc_t)
+                p_init.append(abs(sv.data[idx_map["1000"]]) ** 2)
+                p_transfer.append(abs(sv.data[idx_map["0010"]]) ** 2)
+
+            fig, ax = plt.subplots(figsize=(9, 4), facecolor="#07090f")
+            ax.set_facecolor("#07090f")
+            ax.plot(taus / np.pi, p_init, color="#3b6ef8", lw=2.5,
+                    label=r"$P(|1000\rangle)$ — ↑ at Site 1")
+            ax.plot(taus / np.pi, p_transfer, color="#f8a83b", lw=2.5,
+                    label=r"$P(|0010\rangle)$ — ↑ at Site 2")
+            title = rf"Single ↑ Electron Dynamics  |  J={J}, U={U}"
+
+        else:  # 1100
+            p1100, p0011, p0110, p1001 = [], [], [], []
+            for tau in taus:
+                qc_t = make_hubbard_circuit(J=J, U=U, tau=tau,
+                                            n_trotter=n_trotter, init_state="1100")
+                sv = Statevector(qc_t)
+                p1100.append(abs(sv.data[idx_map["1100"]]) ** 2)
+                p0110.append(abs(sv.data[idx_map["0110"]]) ** 2)
+                p0011.append(abs(sv.data[idx_map["0011"]]) ** 2)
+                p1001.append(abs(sv.data[idx_map["1001"]]) ** 2)
+
+            fig, ax = plt.subplots(figsize=(9, 4), facecolor="#07090f")
+            ax.set_facecolor("#07090f")
+            ax.plot(taus / np.pi, p1100, color="#3b6ef8", lw=2.5,
+                    label=r"$P(|1100\rangle)$ — doublon at Site 1")
+            ax.plot(taus / np.pi, p0011, color="#f83b6e", lw=2.5,
+                    label=r"$P(|0011\rangle)$ — doublon at Site 2")
+            ax.plot(taus / np.pi, p0110, color="#f8a83b", lw=2.5,
+                    label=r"$P(|0110\rangle)$ — ↓ at Site 1, ↑ at Site 2")
+            ax.plot(taus / np.pi, p1001, color="#3bf86e", linestyle="--", lw=2.5,
+                     label=r"$P(|1001\rangle)$ — ↑ at Site 1, ↓ at Site 2")
+            title = rf"Doublon Dynamics  |  J={J}, U={U}"
+
+    ax.set_xlabel(r"$\tau\,/\,\pi$", color="#e2e8f7")
     ax.set_ylabel("Probability", color="#e2e8f7")
-    ax.set_title(r"Electron Transfer Probability: Site 1 → Site 2 (U=0, J=1)", color="#e2e8f7")
+    ax.set_title(title, color="#e2e8f7")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(-0.05, 1.05)
     ax.tick_params(colors="#e2e8f7")
     for spine in ax.spines.values():
         spine.set_edgecolor("#1e2d50")
-    ax.legend(facecolor="#0f1524", labelcolor="#e2e8f7")
+    ax.legend(facecolor="#0f1524", labelcolor="#e2e8f7", framealpha=0.8)
+    fig.tight_layout()
     st.pyplot(fig)
     plt.close()
 
     with st.expander("Discussion"):
-        st.markdown(
-            r"""
-            For a two-level system with tunneling J, the Rabi frequency is $\Omega_R = 2J$.
-            The period is $T = 2\pi / \Omega_R = \pi / J$.
-            At $J = 1$, transfer is complete at $\tau = T/2 = \pi/2 \approx 1.57$.
+        if init_str == "1000":
+            st.markdown(
+                rf"""
+                **Initial state:** $|1000\rangle$ — one spin-up electron at Site 1.
 
-            The plotted curve shows $P(\text{Site 2}) = \sin^2(J\tau)$, peaking at $\tau = \pi/2$,
-            in agreement with analytic prediction.
-            """
-        )
+                For a two-level system with hopping $J$, the Rabi frequency is $\Omega_R = 2J$
+                and the transfer time is $\tau_{{transfer}} = \pi/(2J)$.
+                At $J={J}$: $\tau_{{transfer}} = {np.pi / (2 * J):.3f}$ rad $= {0.5 / J:.3f}\,\pi$.
 
-# ─── Q3.3 Mott Physics ──────────────────────────────────────────────────────────
-elif page == "Q3.3 — Hubbard: Mott Physics":
-    st.header("Q3.3 — Strong Interactions & Mott Physics (U = 10, J = 1)")
-    st.markdown(
-        r"""
-        **Initial state:** $|1100\rangle$ (both electrons at Site 1).
+                {"**U = 0 (non-interacting):** The electron undergoes perfect Rabi oscillations between the two sites, with $P(\\text{Site 2}) = \\sin^2(J\\tau)$." if U == 0 else
+                f"**U = {U} (interacting):** Finite U mixes in other charge sectors, modifying the oscillation amplitude and frequency compared to the pure two-level case."}
+                """
+            )
+        else:
+            st.markdown(
+                rf"""
+                **Initial state:** $|1100\rangle$ — both spins at Site 1 (doublon).
 
-        With large U, double-occupancy is energetically costly → tunneling is suppressed.
-        This is the **Mott insulator** regime.
-        """
-    )
+                The doublon must pay an energy cost $U$ to hop to Site 2.
+                The effective tunneling amplitude is suppressed as $\sim J^2/U$ (second-order perturbation theory).
 
-    n_points = 60
-    taus = np.linspace(0, np.pi, n_points)
-    n_trotter = st.slider("Trotter steps per τ", 1, 20, 10)
-
-    probs_1100, probs_0011 = [], []
-    for tau in taus:
-        qc = make_hubbard_circuit(J=1.0, U=10.0, tau=tau, n_trotter=n_trotter,
-                                  init_state="1100")
-        sv = get_statevector(qc)
-        # |1100⟩ q3q2q1q0 little-endian: q0=0,q1=0,q2=1,q3=1 → binary 1100 → index 12? 
-        # Qiskit: state index = q_{n-1}...q1 q0 where q0 is LSB
-        # |1100⟩ means q0=1,q1=1,q2=0,q3=0 → index = 0b0011 = 3
-        idx_1100 = 0b0011  # q0=1,q1=1
-        # |0011⟩ means q0=0,q1=0,q2=1,q3=1 → index = 0b1100 = 12
-        idx_0011 = 0b1100
-        probs_1100.append(float(np.abs(sv.data[idx_1100]) ** 2))
-        probs_0011.append(float(np.abs(sv.data[idx_0011]) ** 2))
-
-    fig, ax = plt.subplots(figsize=(8, 4), facecolor="#07090f")
-    ax.set_facecolor("#07090f")
-    ax.plot(taus / np.pi, probs_1100, color="#3b6ef8", lw=2.5, label=r"P(|1100⟩) — both at Site 1")
-    ax.plot(taus / np.pi, probs_0011, color="#f83b6e", lw=2.5, label=r"P(|0011⟩) — doublon at Site 2")
-    ax.set_xlabel(r"τ / π", color="#e2e8f7")
-    ax.set_ylabel("Probability", color="#e2e8f7")
-    ax.set_title(r"Mott Physics: U=10, J=1  — Suppressed Tunneling", color="#e2e8f7")
-    ax.tick_params(colors="#e2e8f7")
-    for spine in ax.spines.values():
-        spine.set_edgecolor("#1e2d50")
-    ax.legend(facecolor="#0f1524", labelcolor="#e2e8f7")
-    st.pyplot(fig)
-    plt.close()
-
-    with st.expander("Discussion: Mott Insulator"):
-        st.markdown(
-            r"""
-            When $U \gg J$, tunneling of a doublon (double-occupancy) is energetically penalized
-            by the cost $U$. The effective tunneling rate is suppressed as $\sim J^2/U$ (second-order
-            perturbation theory), leading to an extremely slow oscillation.
-
-            This is the hallmark of a **Mott insulator**: despite having mobile electrons,
-            the strong on-site repulsion U locks them in place — the material becomes insulating
-            not because of a lack of carriers, but because of strong correlations.
-
-            Compare to Q3.2 (U=0): the tunneling was fast ($T = \pi$). Here, even at $\tau = \pi$,
-            the probability of the doublon transferring to Site 2 remains near zero.
-            """
-        )
+                {"**U = 0:** No energy penalty — fast doublon transfer, period $\\sim \\pi/J$." if U == 0 else
+                f"**U = {U} ≫ J = {J}:** Strong suppression of doublon hopping — hallmark of a **Mott insulator**. The system remains frozen near $|1100\\rangle$ throughout the evolution."}
+                """
+            )

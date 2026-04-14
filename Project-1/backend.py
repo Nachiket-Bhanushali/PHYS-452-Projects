@@ -82,6 +82,7 @@ def make_ghz_circuit(n: int = 10) -> QuantumCircuit:
     qc.h(0)
     for i in range(n - 1):
         qc.cx(i, i + 1)
+    qc.barrier()
     qc.measure(range(n), range(n))
     return qc
 
@@ -92,20 +93,23 @@ def make_ghz_circuit(n: int = 10) -> QuantumCircuit:
 
 def _prepare_superposition(qc: QuantumCircuit) -> None:
     """
-    Prepare (1/√2)(|201⟩ + |425⟩) in a 10-qubit register.
-    |201⟩ = |0011001001⟩  (binary of 201, q0 is LSB)
-    |425⟩ = |0110101001⟩  (binary of 425, q0 is LSB)
+    Prepare (1/sqrt(2))(|201> + |425>) using explicit primitive gates.
+    Avoids initialize() which dumps the full state vector into the circuit label.
 
-    In Qiskit little-endian: qubit i = bit i of the integer.
-    |201⟩: 201 = 11001001b → q0=1,q1=0,q2=0,q3=1,q4=0,q5=0,q6=1,q7=1,q8=0,q9=0
-    |425⟩: 425 = 110101001b → q0=1,q1=0,q2=0,q3=1,q4=0,q5=1,q6=0,q7=1,q8=1,q9=0
+    Bit decomposition (little-endian, q0 = LSB):
+      |201>: q0=1, q1=0, q2=0, q3=1, q4=0, q5=0, q6=1, q7=1, q8=0, q9=0
+      |425>: q0=1, q1=0, q2=0, q3=1, q4=0, q5=1, q6=0, q7=1, q8=1, q9=0
+
+    Shared bits: q0=1, q3=1, q7=1
+    Differing bits: q5 (0 vs 1), q6 (1 vs 0), q8 (0 vs 1)
     """
-    # Use initialize to set arbitrary superposition
-    n = 10
-    sv = np.zeros(2 ** n, dtype=complex)
-    sv[201] = 1 / np.sqrt(2)
-    sv[425] = 1 / np.sqrt(2)
-    qc.initialize(sv, range(n))
+    qc.x(0);
+    qc.x(3);
+    qc.x(7)  # shared '1' bits
+    qc.h(5)  # superposition over differing qubit
+    qc.x(6)  # q6=1 for |201> branch
+    qc.cx(5, 6)  # flip q6->0 in |425> branch
+    qc.cx(5, 8)  # set q8=1 in |425> branch
 
 
 def _apply_cnot_chain(qc: QuantumCircuit, reverse: bool = False) -> None:
@@ -119,70 +123,86 @@ def _apply_cnot_chain(qc: QuantumCircuit, reverse: bool = False) -> None:
 
 def make_unitarity_circuit():
     """
-    Returns circuits and statevectors for all three stages of Q1.4.
+    Returns a single labeled circuit and statevectors for all three stages of Q1.4.
+    The circuit uses barrier(label=...) to divide:
+      - State Preparation
+      - Gate Operations
+      - Reverse Operations
     """
-    # Stage 1: Initial state
+    # Full labeled circuit for display
+    qc_full = QuantumCircuit(10)
+    _prepare_superposition(qc_full)
+    qc_full.barrier(label="State Preparation")
+    _apply_cnot_chain(qc_full, reverse=False)
+    qc_full.barrier(label="Gate Operations")
+    _apply_cnot_chain(qc_full, reverse=True)
+    qc_full.barrier(label="Reverse Operations")
+
+    # Statevectors at each stage (separate circuits)
     qc_init = QuantumCircuit(10)
     _prepare_superposition(qc_init)
     sv_init = Statevector(qc_init)
 
-    # Stage 2: After CNOT chain
     qc_forward = QuantumCircuit(10)
     _prepare_superposition(qc_forward)
     _apply_cnot_chain(qc_forward, reverse=False)
     sv_after = Statevector(qc_forward)
 
-    # Stage 3: Reverse (recover)
     qc_reverse = QuantumCircuit(10)
     _prepare_superposition(qc_reverse)
     _apply_cnot_chain(qc_reverse, reverse=False)
     _apply_cnot_chain(qc_reverse, reverse=True)
     sv_recovered = Statevector(qc_reverse)
 
-    return qc_init, qc_forward, qc_reverse, sv_init, sv_after, sv_recovered
+    return qc_full, sv_init, sv_after, sv_recovered
 
 
 # ────────────────────────────────────────────────────────────────────────────────
 #  Q2.1 — Quantum Teleportation
 # ────────────────────────────────────────────────────────────────────────────────
 
-def make_teleportation_circuit(alice_state: str = "custom") -> QuantumCircuit:
-    """
-    3-qubit teleportation circuit.
-    q0: Alice's message qubit
-    q1: Alice's Bell pair qubit
-    q2: Bob's qubit
+# Default angles to produce (2|0> + |1>)/sqrt(5):
+#   Ry(theta_y)|0> = cos(theta_y/2)|0> + sin(theta_y/2)|1>
+#   We need cos(theta_y/2) = 2/sqrt(5), so theta_y = 2*arccos(2/sqrt(5))
+#   Rz(0) leaves relative phase unchanged → theta_z = 0
+ALICE_DEFAULT_THETA_Y = 2 * np.arccos(2 / np.sqrt(5))
+ALICE_DEFAULT_THETA_Z = 0.0
 
-    alice_state: "custom" → |q0⟩ = (2|0⟩+|1⟩)/√5
-                 "zero"   → |q0⟩ = |0⟩
+
+def make_teleportation_circuit(
+        theta_y: float = ALICE_DEFAULT_THETA_Y,
+        theta_z: float = ALICE_DEFAULT_THETA_Z,
+) -> QuantumCircuit:
+    """
+    3-qubit teleportation circuit with a general Alice state.
+    q0: Alice message qubit  — prepared as Rz(theta_z) Ry(theta_y) |0>
+    q1: Alice Bell-pair qubit
+    q2: Bob qubit (receives teleported state)
+
+    Default angles produce (2|0> + |1>)/sqrt(5).
     """
     qr = QuantumRegister(3, "q")
-    cr = ClassicalRegister(2, "c")  # measure Alice's q0,q1
+    cr = ClassicalRegister(2, "c")
     qc = QuantumCircuit(qr, cr)
 
-    # ── Prepare Alice's message qubit ──
-    if alice_state == "custom":
-        # Ry + Rz to get (2|0⟩+|1⟩)/√5
-        # |0⟩ → Ry(2*arccos(2/√5))|0⟩ gives (2|0⟩+|1⟩)/√5 up to global phase
-        theta = 2 * np.arccos(2 / np.sqrt(5))
-        qc.ry(theta, 0)
-    # else: leave as |0⟩
+    # -- Alice's state preparation --
+    qc.ry(theta_y, 0)
+    qc.rz(theta_z, 0)
+    qc.barrier(label="Alice's State")
 
-    qc.barrier(label="Alice's state")
-
-    # ── Bell State Preparation (q1, q2) ──
+    # -- Bell State Preparation (q1, q2) --
     qc.h(1)
     qc.cx(1, 2)
     qc.barrier(label="Bell State Preparation")
 
-    # ── Bell Measurement (q0, q1) ──
+    # -- Bell Measurement (q0, q1) --
     qc.cx(0, 1)
     qc.h(0)
     qc.barrier(label="Bell Measurement")
     qc.measure(qr[0], cr[0])
     qc.measure(qr[1], cr[1])
 
-    # ── Bob's Correction (classically controlled) ──
+    # -- Bob's Correction (classically controlled) --
     with qc.if_test((cr[1], 1)):
         qc.x(2)
     with qc.if_test((cr[0], 1)):
@@ -198,7 +218,7 @@ def make_teleportation_circuit(alice_state: str = "custom") -> QuantumCircuit:
 def make_long_distance_cnot_circuit():
     """
     Perform CNOT q0 → q4 in a linear chain (0-1-2-3-4)
-    using only adjacent CNOTs. Each SWAP = 3 CNOTs.
+    using only adjacent SWAPS and CNOTs. Each SWAP = 3 CNOTs.
 
     Strategy: SWAP q4 toward q0, do CNOT, SWAP back.
     Specifically: SWAP(3,4), SWAP(2,3), SWAP(1,2), CNOT(0,1),
@@ -207,25 +227,32 @@ def make_long_distance_cnot_circuit():
     """
     qc = QuantumCircuit(5)
     n_cnots = 0
+    n_swaps = 0
 
     def swap_adjacent(a, b):
-        nonlocal n_cnots
-        qc.cx(a, b); qc.cx(b, a); qc.cx(a, b)
-        n_cnots += 3
+        nonlocal n_swaps
+        qc.swap(a, b)
+        n_swaps += 1
 
     # Move q4 adjacent to q0
     swap_adjacent(3, 4)
     swap_adjacent(2, 3)
     swap_adjacent(1, 2)
+    qc.barrier(label="Swap q4 → q1")
+
 
     # The actual CNOT
     qc.cx(0, 1)
     n_cnots += 1
+    qc.barrier(label="CNOT q0 → q1")
 
     # Restore positions
     swap_adjacent(1, 2)
     swap_adjacent(2, 3)
     swap_adjacent(3, 4)
+    qc.barrier(label="Swap q1 → q4")
+
+    n_cnots += n_swaps*3    # 3 CNOTs per SWAP gate
 
     return qc, n_cnots
 
@@ -236,120 +263,57 @@ def make_long_distance_cnot_circuit():
 
 def _trotter_step(qc: QuantumCircuit, J: float, U: float, dt: float) -> None:
     """
-    One Trotter step for the 2-site Fermi-Hubbard model on 4 qubits.
+    One Trotter step using RXX, RYY, and RZZ gates.
 
-    Qubit layout:
-        q0: site 1 spin-up  (1↑)
-        q1: site 1 spin-down (1↓)
-        q2: site 2 spin-up  (2↑)
-        q3: site 2 spin-down (2↓)
-
-    JW-mapped terms:
-      Hopping spin-up (q0↔q2):
-        H_J↑ = J/2 * (X0 X2 + Y0 Y2)   [with JW Z-string on q1]
-        e^{-i dt H_J↑} = RXX(-J*dt) composed with JW correction
-
-        For non-adjacent (q0,q2) with JW string on q1:
-          c†_{0}c_{2} → σ+_0 Z_1 σ-_2
-          hopping = -J/2 (X0 Z1 X2 + Y0 Z1 Y2)
-
-      Hopping spin-down (q1↔q3, nearest neighbor, no Z-string needed beyond q1 itself):
-        H_J↓ = J/2 * (X1 X3 + Y1 Y3)   [with JW Z-string on q2]
-        For q1,q3 non-adjacent:
-          hopping = -J/2 (X1 Z2 X3 + Y1 Z2 Y3)
-
-      Interaction terms H_U (on-site):
-        Site 1: U/4 * (I - Z0 - Z1 + Z0 Z1)
-        Site 2: U/4 * (I - Z2 - Z3 + Z2 Z3)
+    Args:
+        dt: The individual time step size derived from tau / n_trotter.
     """
+    # ── Tunneling terms for spin up - XX + YY on q0,q2 ─────────────────────────────
+    qc.rxx(-J * dt / 2, 0, 2)
+    qc.ryy(-J * dt / 2, 0, 2)
+    qc.barrier(label = "Tunneling term for spin up")
 
-    # ── Spin-up hopping: q0 ↔ q2 with JW Z-string on q1 ──
-    # e^{-i dt * (-J/2)(X0 Z1 X2 + Y0 Z1 Y2)}
-    # Decompose using: XZX = -Y on middle, YZY = ... 
-    # Standard decomposition for XZX + YZY Pauli strings:
-    # Use CNOT-based implementation
+    # ── Tunneling terms for spin down - XX + YY on q1,q3 ───────────────────────────
+    qc.rxx(-J * dt / 2, 1, 3)
+    qc.ryy(-J * dt / 2, 1, 3)
+    qc.barrier(label = "Tunneling term for spin down")
 
-    # XZX term: e^{i J dt/2 * X0 Z1 X2}
-    t = J * dt / 2  # note sign: H = -J * hopping → exponent picks up -i dt * (-J/2) = +i J dt/2
-
-    # e^{i t X0 Z1 X2}: change basis, apply RZZ-like circuit
-    # CNOT(0,1), CNOT(2,1) → ZZZ on middle, then Rz, then uncompute
-    qc.h(0); qc.h(2)           # X basis on 0,2
-    qc.cx(0, 1); qc.cx(2, 1)   # parity into q1
-    qc.rz(-2 * t, 1)            # phase
-    qc.cx(0, 1); qc.cx(2, 1)
-    qc.h(0); qc.h(2)
-    qc.barrier()
-
-    # e^{i t Y0 Z1 Y2}
-    qc.sdg(0); qc.h(0)         # Y basis on 0
-    qc.sdg(2); qc.h(2)         # Y basis on 2
-    qc.cx(0, 1); qc.cx(2, 1)
-    qc.rz(-2 * t, 1)
-    qc.cx(0, 1); qc.cx(2, 1)
-    qc.h(0); qc.s(0)
-    qc.h(2); qc.s(2)
-    qc.barrier()
-
-    # ── Spin-down hopping: q1 ↔ q3 with JW Z-string on q2 ──
-    qc.h(1); qc.h(3)
-    qc.cx(1, 2); qc.cx(3, 2)
-    qc.rz(-2 * t, 2)
-    qc.cx(1, 2); qc.cx(3, 2)
-    qc.h(1); qc.h(3)
-    qc.barrier()
-
-    qc.sdg(1); qc.h(1)
-    qc.sdg(3); qc.h(3)
-    qc.cx(1, 2); qc.cx(3, 2)
-    qc.rz(-2 * t, 2)
-    qc.cx(1, 2); qc.cx(3, 2)
-    qc.h(1); qc.s(1)
-    qc.h(3); qc.s(3)
-    qc.barrier()
-
-    # ── Interaction terms: site 1 (q0,q1) and site 2 (q2,q3) ──
-    # H_U = U/4 (I - Z0 - Z1 + Z0Z1) + U/4 (I - Z2 - Z3 + Z2Z3)
-    # e^{-i dt H_U}:
-    #   global phase from I terms: ignored (unobservable)
-    #   Z0 term → Rz(+U*dt/2, q0) [e^{-i dt (-U/4)Z0} = e^{+i U dt/4 Z0} = Rz(-U*dt/2,q0) 
-    #              note Rz(λ)|ψ⟩ = e^{-iλ/2 Z}|ψ⟩ → Rz(2*U*dt/4) = Rz(U*dt/2)]
-    u_phase = U * dt / 2
-    # Single-Z terms (chemical potential shifts)
-    qc.rz(u_phase, 0)
-    qc.rz(u_phase, 1)
-    qc.rz(u_phase, 2)
-    qc.rz(u_phase, 3)
-    # ZZ terms (entangling)
-    # e^{-i dt (U/4) Z0 Z1} = RZZ(U*dt/2)
-    qc.rzz(U * dt / 2, 0, 1)
-    qc.rzz(U * dt / 2, 2, 3)
-    qc.barrier()
+    # ── Interaction: site 1 (q0, q1) and site 2 (q2, q3) ────────────────────────
+    # Angle u_phase simulates the Coulomb repulsion energy cost
+    u_phase = U * dt / 4
+    for site_pair in [(0, 1), (2, 3)]:
+        i, j = site_pair
+        qc.rz(-u_phase, i)
+        qc.rz(-u_phase, j)
+        qc.rzz(u_phase, i, j)
+    qc.barrier(label = "Interaction term")
 
 
 def make_hubbard_circuit(
-    J: float = 1.0,
-    U: float = 0.0,
-    tau: float = 0.1,
-    n_trotter: int = 10,
-    init_state: str = "1000",
+        J: float = 1.0,
+        U: float = 0.0,
+        tau: float = 3.1415,
+        n_trotter: int = 20,
+        init_state: str = "1000"
 ) -> QuantumCircuit:
     """
-    Build a Trotterized Hubbard circuit.
+    Build a Trotterized Hubbard circuit with constant total time tau.
 
-    init_state: "1000" → q0=1 (spin-up at site 1)
-                "1100" → q0=1,q1=1 (both spins at site 1)
+    Args:
+        tau: Constant total evolution time (e.g., pi for Rabi transfer)
+        n_trotter: Variable number of steps to adjust Trotter error.
     """
     qc = QuantumCircuit(4)
 
-    # ── Initialize state ──
-    for i, bit in enumerate(reversed(init_state)):  # reversed: q0 is rightmost
+    # Initialize state (e.g., |1000> for Q3.2 or |1100> for Q3.3)
+    for i, bit in enumerate(reversed(init_state)):
         if bit == "1":
             qc.x(i)
-    qc.barrier()
+    qc.barrier(label = "State Preparation")
 
-    # ── Trotterize ──
+    # Proportional time step calculation
     dt = tau / n_trotter
+
     for _ in range(n_trotter):
         _trotter_step(qc, J=J, U=U, dt=dt)
 
